@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>이재영 — 음악 선생님</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&family=Noto+Sans+KR:wght@300;400;500&family=Gochi+Hand&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --green:     #4caf82;
+      --green-lt:  #a8d8b9;
+      --pink:      #f4a7b9;
+      --pink-lt:   #fad4df;
+      --text:      #3a3a3a;
+      --text-soft: #6b7a72;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Noto Sans KR', sans-serif;
+      font-weight: 300;
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+      background: linear-gradient(145deg,
+        #b8e8cb 0%, #d6f0e0 18%,
+        #fde8ef 45%, #f5eaf8 65%,
+        #c8e8d5 100%);
+      background-attachment: fixed;
+    }
+
+    /* noise texture */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.5;
+    }
+
+    #canvas-bg {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* ── Music bar ── */
+    .music-bar {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      z-index: 300;
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      background: rgba(255,255,255,0.75);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(168,216,185,0.7);
+      border-radius: 50px;
+      padding: 0.55rem 1.1rem;
+      box-shadow: 0 8px 30px rgba(76,175,130,0.18);
+    }
+    #play-btn {
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      border: none;
+      background: linear-gradient(135deg, var(--green), var(--pink));
+      color: #fff;
+      font-size: 0.95rem;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: transform 0.2s, box-shadow 0.2s;
+      flex-shrink: 0;
+    }
+    #play-btn:hover { transform: scale(1.12); box-shadow: 0 4px 16px rgba(76,175,130,0.45); }
+    .music-label { font-size: 0.7rem; color: var(--text-soft); white-space: nowrap; }
+    .music-wave  { display: flex; align-items: center; gap: 2px; }
+    .music-wave span {
+      display: block; width: 3px; height: 12px;
+      background: linear-gradient(to top, var(--green), var(--pink));
+      border-radius: 2px;
+      animation: wave 1s ease-in-out infinite;
+    }
+    .music-wave span:nth-child(2) { animation-delay:.15s; height:18px; }
+    .music-wave span:nth-child(3) { animation-delay:.3s;  height:10px; }
+    .music-wave span:nth-child(4) { animation-delay:.45s; height:16px; }
+    .music-wave span:nth-child(5) { animation-delay:.6s;  height:8px;  }
+    .music-wave.paused span { animation-play-state: paused; opacity: 0.3; }
+    @keyframes wave {
+      0%,100% { transform: scaleY(1);   }
+      50%     { transform: scaleY(0.3); }
+    }
+
+    /* ── Page ── */
+    .page {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 0 1.5rem 8rem;
+    }
+
+    /* ── Hero ── */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 4rem 1.5rem;
+      gap: 1.4rem;
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: .5rem;
+      font-size: .78rem; color: var(--green);
+      background: rgba(168,216,185,.35);
+      border: 1px solid var(--green-lt);
+      border-radius: 50px; padding: .38rem 1.1rem;
+      letter-spacing: .1em; font-weight: 500;
+      opacity: 0; animation: floatUp .8s .2s ease forwards;
+    }
+    .hero-title {
+      font-family: 'Nanum Myeongjo', serif;
+      font-size: clamp(3.4rem,10vw,7.5rem);
+      font-weight: 800; line-height: 1; letter-spacing: -.02em;
+      background: linear-gradient(140deg, #2e8e5a 0%, #c45890 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+      opacity: 0; animation: floatUp .9s .4s ease forwards;
+    }
+    .hero-name-en {
+      font-family: 'Gochi Hand', cursive;
+      font-size: clamp(1.1rem,3vw,1.65rem);
+      color: var(--pink); letter-spacing: .08em;
+      opacity: 0; animation: floatUp .8s .55s ease forwards;
+    }
+    .hero-desc {
+      max-width: 540px;
+      font-size: clamp(.95rem,2.5vw,1.08rem);
+      line-height: 2.1; color: var(--text-soft); font-weight: 400;
+      opacity: 0; animation: floatUp .8s .7s ease forwards;
+    }
+    .hero-desc strong { color: #3a9e6a; font-weight: 500; }
+    .hero-scroll {
+      margin-top: 1.5rem;
+      display: flex; flex-direction: column; align-items: center; gap: .4rem;
+      font-size: .7rem; color: var(--text-soft);
+      letter-spacing: .15em; text-transform: uppercase;
+      opacity: 0; animation: floatUp .8s 1s ease forwards;
+    }
+    .scroll-line {
+      width: 1px; height: 48px;
+      background: linear-gradient(to bottom, var(--green), transparent);
+      animation: scrollPulse 1.8s ease-in-out infinite;
+    }
+    @keyframes scrollPulse {
+      0%,100% { opacity:.3; transform:scaleY(.8); }
+      50%     { opacity:1;  transform:scaleY(1);  }
+    }
+
+    /* ── Cards ── */
+    .cards-section {
+      width: 100%; max-width: 880px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.4rem;
+      padding: 2rem 0;
+    }
+    .card {
+      background: rgba(255,255,255,.62);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255,255,255,.85);
+      border-radius: 22px;
+      padding: 2rem 1.8rem;
+      box-shadow: 0 8px 30px rgba(76,175,130,.1), 0 2px 8px rgba(0,0,0,.04);
+      transition: transform .3s, box-shadow .3s;
+      opacity: 0; animation: floatUp .8s ease forwards;
+    }
+    .card:hover { transform: translateY(-6px); box-shadow: 0 22px 50px rgba(76,175,130,.2); }
+    .card:nth-child(1){animation-delay:.1s}
+    .card:nth-child(2){animation-delay:.25s}
+    .card:nth-child(3){animation-delay:.4s}
+    .card-icon { font-size: 2.2rem; margin-bottom: .9rem; }
+    .card-title {
+      font-family: 'Nanum Myeongjo', serif;
+      font-size: 1.2rem; font-weight: 700; margin-bottom: .65rem;
+    }
+    .card-body { font-size: .9rem; line-height: 1.85; color: var(--text-soft); }
+
+    /* ── Quote ── */
+    .quote-section {
+      width: 100%; max-width: 680px;
+      margin: 2rem 0;
+      background: linear-gradient(135deg,rgba(168,216,185,.32),rgba(244,167,185,.22));
+      border: 1px solid rgba(168,216,185,.55);
+      border-radius: 26px;
+      padding: 2.8rem 3.2rem;
+      text-align: center;
+      position: relative; overflow: hidden;
+    }
+    .quote-section::before {
+      content:'♪'; position:absolute; top:-10px; left:18px;
+      font-size:8rem; opacity:.06; color:var(--green); line-height:1;
+    }
+    .quote-section::after {
+      content:'♬'; position:absolute; bottom:-20px; right:18px;
+      font-size:8rem; opacity:.06; color:var(--pink); line-height:1;
+    }
+    .quote-text {
+      font-family: 'Nanum Myeongjo', serif;
+      font-size: clamp(1.05rem,2.8vw,1.35rem);
+      line-height: 1.95; font-style: italic;
+      position: relative; z-index: 1;
+    }
+    .quote-author {
+      margin-top: 1.1rem; font-size: .8rem;
+      color: var(--green); letter-spacing: .15em; font-weight: 500;
+    }
+
+    footer {
+      position: relative; z-index: 2;
+      text-align: center; padding: 2rem;
+      font-size: .72rem; color: var(--text-soft); letter-spacing: .08em;
+    }
+
+    @keyframes floatUp {
+      from { opacity:0; transform:translateY(28px); }
+      to   { opacity:1; transform:translateY(0);    }
+    }
+
+    @media (max-width:600px) {
+      .quote-section { padding: 2rem 1.6rem; }
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="canvas-bg"></canvas>
+<audio id="bg-music" src="bg.mp3" loop preload="auto"></audio>
+
+<div class="music-bar">
+  <button id="play-btn" title="음악 재생/일시정지">▶</button>
+  <span class="music-label">배경음악</span>
+  <div class="music-wave paused" id="wave">
+    <span></span><span></span><span></span><span></span><span></span>
+  </div>
+</div>
+
+<div class="page">
+
+  <section class="hero">
+    <div class="hero-badge">🎵 Music Teacher</div>
+    <h1 class="hero-title">이재영</h1>
+    <div class="hero-name-en">Lee Jae-young</div>
+    <p class="hero-desc">
+      <strong>노래를 좋아하고 즐겨 부르며</strong><br/>
+      음악 수업을 재미있게 이끌어 가고자<br/>
+      늘 노력하는 음악 선생님입니다 🌸
+    </p>
+    <div class="hero-scroll">
+      <span>scroll</span>
+      <div class="scroll-line"></div>
+    </div>
+  </section>
+
+  <div class="cards-section">
+    <div class="card">
+      <div class="card-icon">🎤</div>
+      <div class="card-title">노래를 사랑해요</div>
+      <div class="card-body">
+        장르를 가리지 않고 노래 부르는 것을 즐깁니다. 음악 안에서 감정을 표현하고 이야기를 나누는 일이 가장 행복합니다.
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-icon">🎵</div>
+      <div class="card-title">즐거운 음악 수업</div>
+      <div class="card-body">
+        딱딱한 이론보다 함께 노래하고 느끼는 수업을 지향합니다. 모든 학생이 음악을 즐길 수 있도록 다양하게 수업을 설계합니다.
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-icon">🌸</div>
+      <div class="card-title">따뜻한 선생님</div>
+      <div class="card-body">
+        음악을 통해 학생들과 마음으로 소통합니다. 음악이 일상의 작은 기쁨이 되도록 함께 성장해 나가고 싶습니다.
+      </div>
+    </div>
+  </div>
+
+  <div class="quote-section">
+    <p class="quote-text">
+      "음악은 세상의 언어입니다.<br/>
+      함께 노래할 때, 우리는 하나가 됩니다."
+    </p>
+    <div class="quote-author">— 이재영 선생님</div>
+  </div>
+
+</div>
+
+<footer>© 2025 이재영 &nbsp;|&nbsp; Made with ♪ &nbsp;|&nbsp; GitHub Pages</footer>
+
+<script>
+/* ── Canvas particles: petals + quarter/eighth notes ── */
+const canvas = document.getElementById('canvas-bg');
+const ctx    = canvas.getContext('2d');
+
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+resize();
+window.addEventListener('resize', resize);
+
+class Particle {
+  constructor() { this.reset(true); }
+
+  reset(init = false) {
+    // 45% petal, 30% quarter note, 25% eighth note
+    const r = Math.random();
+    this.type = r < 0.45 ? 'petal' : r < 0.75 ? 'quarter' : 'eighth';
+    this.x     = Math.random() * canvas.width;
+    this.y     = init ? Math.random() * canvas.height : -70;
+    this.size  = this.type === 'petal' ? 8 + Math.random() * 15 : 14 + Math.random() * 16;
+    this.speed = 0.4 + Math.random() * 0.75;
+    this.drift = (Math.random() - 0.5) * 0.5;
+    this.angle = Math.random() * Math.PI * 2;
+    this.spin  = (Math.random() - 0.5) * 0.022;
+    this.alpha = 0.22 + Math.random() * 0.45;
+    this.swing = Math.random() * Math.PI * 2;
+    this.swingSpeed = 0.012 + Math.random() * 0.018;
+
+    if (this.type === 'petal') {
+      const isPink = Math.random() < 0.6;
+      this.color = isPink
+        ? `hsl(${340 + Math.random()*20},${65+Math.random()*20}%,${72+Math.random()*12}%)`
+        : `hsl(${138 + Math.random()*18},${38+Math.random()*20}%,${62+Math.random()*14}%)`;
+    } else {
+      this.color = Math.random() < 0.5
+        ? `rgba(60,155,100,${this.alpha})`
+        : `rgba(190,80,130,${this.alpha})`;
+    }
+  }
+
+  drawPetal() {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.angle);
+    ctx.globalAlpha = this.alpha;
+    ctx.fillStyle = this.color;
+    ctx.beginPath();
+    const s = this.size;
+    ctx.moveTo(0, -s);
+    ctx.bezierCurveTo( s*.85, -s*.35,  s*.85,  s*.35, 0,  s);
+    ctx.bezierCurveTo(-s*.85,  s*.35, -s*.85, -s*.35, 0, -s);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  drawNote(eighth) {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.angle * 0.25);
+    ctx.globalAlpha = this.alpha;
+    ctx.fillStyle = this.color;
+    ctx.strokeStyle = this.color;
+    const s = this.size;
+
+    // oval head (filled, slightly tilted)
+    ctx.beginPath();
+    ctx.ellipse(0, s * 0.52, s * 0.56, s * 0.38, -0.38, 0, Math.PI * 2);
+    ctx.fill();
+
+    // stem (right side of head, upward)
+    const stemX = s * 0.44;
+    ctx.fillRect(stemX - 1.5, -s * 0.85, 2.5, s * 1.38);
+
+    if (eighth) {
+      // eighth-note flag
+      ctx.beginPath();
+      ctx.moveTo(stemX + 1, -s * 0.85);
+      ctx.bezierCurveTo(stemX + s * .7, -s * .45, stemX + s * .8, s * .05, stemX + 1, s * .25);
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  draw() {
+    if      (this.type === 'petal')   this.drawPetal();
+    else if (this.type === 'quarter') this.drawNote(false);
+    else                              this.drawNote(true);
+  }
+
+  update() {
+    this.swing += this.swingSpeed;
+    this.x     += this.drift + Math.sin(this.swing) * 0.55;
+    this.y     += this.speed;
+    this.angle += this.spin;
+    if (this.y > canvas.height + 80) this.reset();
+  }
+}
+
+const particles = Array.from({ length: 65 }, () => new Particle());
+
+(function animate() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  particles.forEach(p => { p.update(); p.draw(); });
+  requestAnimationFrame(animate);
+})();
+
+/* ── Music player ── */
+const audio   = document.getElementById('bg-music');
+const playBtn = document.getElementById('play-btn');
+const wave    = document.getElementById('wave');
+let   playing = false;
+
+playBtn.addEventListener('click', () => {
+  if (playing) {
+    audio.pause();
+    playBtn.textContent = '▶';
+    wave.classList.add('paused');
+  } else {
+    audio.play().catch(() => {});
+    playBtn.textContent = '⏸';
+    wave.classList.remove('paused');
+  }
+  playing = !playing;
+});
+</script>
+</body>
+</html>
